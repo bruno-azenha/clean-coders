@@ -3,6 +3,7 @@ package processor
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -81,6 +82,43 @@ func (vf *VerifierFixture) TestHTTPResponseBodyClosed() {
 	vf.client.Configure(rawJSONOutput, http.StatusOK, nil)
 	vf.verifier.Verify(AddressInput{})
 	vf.So(vf.client.responseBody.timesClosed, should.Equal, 1)
+}
+
+func (vf *VerifierFixture) TestAddressStatus() {
+	var (
+		deliverableJSON      = buildAnalysisJSON("Y", "N", "Y")
+		missingSecondaryJSON = buildAnalysisJSON("D", "N", "Y")
+		droppedSecondaryJSON = buildAnalysisJSON("S", "N", "Y")
+		vacantJSON           = buildAnalysisJSON("Y", "Y", "Y")
+		inactiveJSON         = buildAnalysisJSON("Y", "N", "?")
+		invalidJSON          = buildAnalysisJSON("N", "?", "?")
+	)
+
+	vf.verifyAndAssertStatus(deliverableJSON, "Deliverable")
+	vf.verifyAndAssertStatus(missingSecondaryJSON, "Deliverable")
+	vf.verifyAndAssertStatus(droppedSecondaryJSON, "Deliverable")
+	vf.verifyAndAssertStatus(inactiveJSON, "Inactive")
+	vf.verifyAndAssertStatus(vacantJSON, "Vacant")
+	vf.verifyAndAssertStatus(invalidJSON, "Invalid")
+}
+
+func (vf *VerifierFixture) verifyAndAssertStatus(jsonResponse, expectedStatus string) {
+	vf.client.Configure(jsonResponse, http.StatusOK, nil)
+	output := vf.verifier.Verify(AddressInput{})
+	vf.So(output.Status, should.Equal, expectedStatus)
+}
+
+func buildAnalysisJSON(match, vacant, active string) string {
+	template := `[
+		{
+			"analysis": {
+				"dpv_match_code": "%s",
+				"dpv_vacant": "%s",
+				"active": "%s"
+			}
+		}
+	]`
+	return fmt.Sprintf(template, match, vacant, active)
 }
 
 const rawJSONOutput = `

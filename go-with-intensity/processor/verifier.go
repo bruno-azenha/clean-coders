@@ -47,6 +47,7 @@ func (sv *SmartyVerifier) translateCandidate(candidates []Candidate) AddressOutp
 
 	candidate := candidates[0]
 	return AddressOutput{
+		Status:        computeStatus(candidate),
 		DeliveryLine1: candidate.DeliveryLine1,
 		LastLine:      candidate.LastLine,
 		City:          candidate.Components.City,
@@ -55,12 +56,19 @@ func (sv *SmartyVerifier) translateCandidate(candidates []Candidate) AddressOutp
 	}
 }
 
-type Candidate struct {
-	DeliveryLine1 string `json:"delivery_line_1"`
-	LastLine      string `json:"last_line"`
-	Components    struct {
-		City    string `json:"city_name"`
-		State   string `json:"state_abbreviation"`
-		ZIPCode string `json:"zipcode"`
-	} `json:"components"`
+func computeStatus(candidate Candidate) string {
+	analysis := candidate.Analysis
+	if !isDeliverable(analysis.Match) {
+		return "Invalid"
+	} else if analysis.Vacant == "Y" {
+		return "Vacant"
+	} else if analysis.Active != "Y" {
+		return "Inactive"
+	} else {
+		return "Deliverable"
+	}
+}
+
+func isDeliverable(value string) bool {
+	return value == "Y" || value == "S" || value == "D"
 }
