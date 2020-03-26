@@ -2,7 +2,7 @@ package processor
 
 import (
 	"bytes"
-	"io/ioutil"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -40,25 +40,61 @@ func (vf *VerifierFixture) TestRequestComposedProperly() {
 		ZIPCode: "ZIPCode",
 	}
 
+	vf.client.Configure("[{}]", http.StatusOK, nil)
+
 	vf.verifier.Verify(input)
 
 	vf.So(vf.client.request.Method, should.Equal, "GET")
 	vf.So(vf.client.request.URL.Path, should.Equal, "/street-address")
-	vf.AssertQueryStringValue("street", "Street1")
-	vf.AssertQueryStringValue("city", "City")
-	vf.AssertQueryStringValue("state", "State")
-	vf.AssertQueryStringValue("zipcode", "ZIPCode")
+	vf.AssertQueryStringValue("street", input.Street1)
+	vf.AssertQueryStringValue("city", input.City)
+	vf.AssertQueryStringValue("state", input.State)
+	vf.AssertQueryStringValue("zipcode", input.ZIPCode)
 }
 
 func (vf *VerifierFixture) TestResponseParsed() {
-	vf.client.response = &http.Response{
-		Body:       ioutil.NopCloser(bytes.NewBufferString(`[{""}]`)),
-		StatusCode: http.StatusOK,
-	}
-
+	vf.client.Configure(rawJSONOutput, http.StatusOK, nil)
 	result := vf.verifier.Verify(AddressInput{})
-	vf.So(result.DeliveryLine1, should.Equal, "Hello World!")
+
+	vf.So(result.DeliveryLine1, should.Equal, "1 Santa Claus ln")
+	vf.So(result.LastLine, should.Equal, "North Pole AK 99705-9901")
+	vf.So(result.City, should.Equal, "North Pole")
+	vf.So(result.State, should.Equal, "AK")
+	vf.So(result.ZIPCode, should.Equal, "99705")
+
 }
+
+func (vf *VerifierFixture) TestMalformedJSONHandled() {
+	const malformedRawJSONOutput = `I am not JSON!`
+	vf.client.Configure(malformedRawJSONOutput, http.StatusOK, nil)
+	result := vf.verifier.Verify(AddressInput{})
+	vf.So(result.Status, should.Equal, "Invalid API response")
+}
+
+func (vf *VerifierFixture) TestHTTPErrorHandled() {
+	vf.client.Configure("", 0, errors.New("gophers"))
+	result := vf.verifier.Verify(AddressInput{})
+	vf.So(result.Status, should.Equal, "Invalid API response")
+}
+
+func (vf *VerifierFixture) TestHTTPResponseBodyClosed() {
+	vf.client.Configure(rawJSONOutput, http.StatusOK, nil)
+	vf.verifier.Verify(AddressInput{})
+	vf.So(vf.client.responseBody.timesClosed, should.Equal, 1)
+}
+
+const rawJSONOutput = `
+[
+	{
+		"delivery_line_1": "1 Santa Claus ln",
+		"last_line": "North Pole AK 99705-9901",
+		"components": {
+			"city_name": "North Pole",
+			"state_abbreviation": "AK",
+			"zipcode": "99705"
+		}
+	}
+]`
 
 func (vf VerifierFixture) rawQuery() string {
 	return vf.client.request.URL.RawQuery
@@ -72,15 +108,19 @@ func (vf VerifierFixture) AssertQueryStringValue(key, expected string) {
 ////////////////////////////
 
 type FakeHTTPClient struct {
-	request  *http.Request
-	response *http.Response
-	err      error
+	request      *http.Request
+	response     *http.Response
+	responseBody *SpyBuffer
+	err          error
 }
 
 func (fc *FakeHTTPClient) Configure(responseText string, statusCode int, err error) {
-	fc.response = &http.Response{
-		Body:       ioutil.NopCloser(bytes.NewBufferString(responseText)),
-		StatusCode: statusCode,
+	if err == nil {
+		fc.responseBody = NewSpyBuffer(responseText)
+		fc.response = &http.Response{
+			Body:       fc.responseBody,
+			StatusCode: statusCode,
+		}
 	}
 	fc.err = err
 }
@@ -88,4 +128,23 @@ func (fc *FakeHTTPClient) Configure(responseText string, statusCode int, err err
 func (fc *FakeHTTPClient) Do(request *http.Request) (*http.Response, error) {
 	fc.request = request
 	return fc.response, fc.err
+}
+
+///////////////////////////
+
+type SpyBuffer struct {
+	*bytes.Buffer
+	timesClosed int
+}
+
+func NewSpyBuffer(value string) *SpyBuffer {
+	return &SpyBuffer{
+		Buffer: bytes.NewBufferString(value),
+	}
+}
+
+func (sb *SpyBuffer) Close() error {
+	sb.timesClosed++
+	sb.Buffer.Reset()
+	return nil
 }

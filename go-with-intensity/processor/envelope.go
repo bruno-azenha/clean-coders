@@ -14,6 +14,11 @@ type (
 	}
 
 	AddressOutput struct {
+		Status        string
 		DeliveryLine1 string
+		LastLine      string
+		City          string
+		State         string
+		ZIPCode       string
 	}
 )
