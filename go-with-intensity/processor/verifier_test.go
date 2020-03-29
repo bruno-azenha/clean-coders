@@ -148,13 +148,13 @@ func (vf VerifierFixture) AssertQueryStringValue(key, expected string) {
 type FakeHTTPClient struct {
 	request      *http.Request
 	response     *http.Response
-	responseBody *SpyBuffer
+	responseBody *VerifierSpyBuffer
 	err          error
 }
 
 func (fc *FakeHTTPClient) Configure(responseText string, statusCode int, err error) {
 	if err == nil {
-		fc.responseBody = NewSpyBuffer(responseText)
+		fc.responseBody = NewVerifierSpyBuffer(responseText)
 		fc.response = &http.Response{
 			Body:       fc.responseBody,
 			StatusCode: statusCode,
@@ -170,18 +170,18 @@ func (fc *FakeHTTPClient) Do(request *http.Request) (*http.Response, error) {
 
 ///////////////////////////
 
-type SpyBuffer struct {
+type VerifierSpyBuffer struct {
 	*bytes.Buffer
 	timesClosed int
 }
 
-func NewSpyBuffer(value string) *SpyBuffer {
-	return &SpyBuffer{
+func NewVerifierSpyBuffer(value string) *VerifierSpyBuffer {
+	return &VerifierSpyBuffer{
 		Buffer: bytes.NewBufferString(value),
 	}
 }
 
-func (sb *SpyBuffer) Close() error {
+func (sb *VerifierSpyBuffer) Close() error {
 	sb.timesClosed++
 	sb.Buffer.Reset()
 	return nil
