@@ -31,7 +31,7 @@ func (shf *SequenceHandlerFixture) TestExpectedEnvelopeSentToOutput() {
 
 	shf.handler.Handle()
 
-	shf.So(shf.sequenceOrder(), should.Resemble, []int{0, 1, 2, 3})
+	shf.So(shf.sequenceOrder(), should.Resemble, []int{0, 1, 2})
 	shf.So(shf.handler.buffer, should.BeEmpty)
 }
 
@@ -40,19 +40,28 @@ func (shf *SequenceHandlerFixture) TestEnvelopesReceivedOutOfOrder_BufferedUntil
 
 	shf.handler.Handle()
 
-	shf.So(shf.sequenceOrder(), should.Resemble, []int{0, 1, 2, 3, 4})
+	shf.So(shf.sequenceOrder(), should.Resemble, []int{0, 1, 2, 3})
 	shf.So(shf.handler.buffer, should.BeEmpty)
 }
 
 func (shf *SequenceHandlerFixture) sendEnvelopesInSequence(sequences ...int) {
+	max := maxInt(sequences)
 	for sequence := range sequences {
-		shf.input <- &Envelope{Sequence: sequence}
+		shf.input <- &Envelope{Sequence: sequence, EOF: max == sequence}
 	}
-	close(shf.input)
+}
+
+func maxInt(ints []int) (max int) {
+	max = 0
+	for _, value := range ints {
+		if value > max {
+			max = value
+		}
+	}
+	return max
 }
 
 func (shf *SequenceHandlerFixture) sequenceOrder() (order []int) {
-	close(shf.output)
 	for envelope := range shf.output {
 		order = append(order, envelope.Sequence)
 	}

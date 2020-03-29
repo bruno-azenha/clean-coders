@@ -11,7 +11,7 @@ func NewSequenceHandler(input, output chan *Envelope) *SequenceHandler {
 	return &SequenceHandler{
 		input:   input,
 		output:  output,
-		counter: 0,
+		counter: initialSequenceValue,
 		buffer:  map[int]*Envelope{},
 	}
 }
@@ -21,6 +21,7 @@ func (sh *SequenceHandler) Handle() {
 		sh.processEnvelope(envelope)
 	}
 
+	close(sh.output)
 }
 
 func (sh *SequenceHandler) processEnvelope(envelope *Envelope) {
@@ -34,8 +35,17 @@ func (sh *SequenceHandler) sendBufferedEnvelopesInOrder() {
 		if !found {
 			break
 		}
-		sh.output <- next
-		delete(sh.buffer, sh.counter)
-		sh.counter++
+		sh.sendNextEnvelope(next)
 	}
+}
+
+func (sh *SequenceHandler) sendNextEnvelope(envelope *Envelope) {
+	if envelope.EOF {
+		close(sh.input)
+	} else {
+		sh.output <- envelope
+
+	}
+	delete(sh.buffer, sh.counter)
+	sh.counter++
 }
