@@ -14,6 +14,12 @@ type SmartyVerifier struct {
 	client HTTPClient
 }
 
+func NewSmartyVerifier(client HTTPClient) *SmartyVerifier {
+	return &SmartyVerifier{
+		client: client,
+	}
+}
+
 func (sv *SmartyVerifier) Verify(input AddressInput) AddressOutput {
 	request := sv.buildRequest(input)
 	response, _ := sv.client.Do(request)
